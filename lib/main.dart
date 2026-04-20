@@ -1,214 +1,127 @@
-import 'dart:convert';
 import 'package:flutter/material.dart';
-import 'package:http/http.dart' as http;
-import 'package:fl_chart/fl_chart.dart';
+import 'covered_call_calculator.dart';
+import 'stock_api_service.dart';
 
 void main() {
-  runApp(const CoveredCallApp());
+  runApp(const MyApp());
 }
 
-class CoveredCallApp extends StatelessWidget {
-  const CoveredCallApp({super.key});
+class MyApp extends StatelessWidget {
+  const MyApp({super.key});
 
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'Covered Call Builder',
+      title: 'Covered Call Calculator',
       debugShowCheckedModeBanner: false,
       theme: ThemeData(
-        colorScheme: ColorScheme.fromSeed(seedColor: Colors.blue),
+        primarySwatch: Colors.blue,
         useMaterial3: true,
       ),
-      home: const CoveredCallHome(),
+      home: const CoveredCallScreen(),
     );
   }
 }
 
-class CoveredCallHome extends StatefulWidget {
-  const CoveredCallHome({super.key});
+class CoveredCallScreen extends StatefulWidget {
+  const CoveredCallScreen({super.key});
 
   @override
-  State<CoveredCallHome> createState() => _CoveredCallHomeState();
+  State<CoveredCallScreen> createState() => _CoveredCallScreenState();
 }
 
-class _CoveredCallHomeState extends State<CoveredCallHome> {
-  final TextEditingController tickerController = TextEditingController();
-  final TextEditingController strikeController = TextEditingController();
-  final TextEditingController premiumController = TextEditingController();
-  final TextEditingController daysController = TextEditingController();
+class _CoveredCallScreenState extends State<CoveredCallScreen> {
+  // Controllers
+  final tickerController = TextEditingController();
+  final stockController = TextEditingController();
+  final strikeController = TextEditingController();
+  final premiumController = TextEditingController();
+  final daysController = TextEditingController();
 
-  String currentPrice = "—";
-  String result = "";
+  CoveredCallResult? result;
 
-  final String apiKey = "YOUR_ALPHA_VANTAGE_KEY";
-
-  Future<void> fetchStockPrice(String ticker) async {
-    if (ticker.isEmpty) return;
-
-    setState(() {
-      currentPrice = "Loading...";
-      result = "";
-    });
-
-    final url =
-        "https://www.alphavantage.co/query?function=GLOBAL_QUOTE&symbol=$ticker&apikey=$apiKey";
-
+  // 🟢 NEW: Fetch live stock price
+  Future<void> fetchPrice() async {
     try {
-      final response = await http.get(Uri.parse(url));
+      final ticker = tickerController.text.trim().toUpperCase();
 
-      if (response.statusCode == 200) {
-        final data = jsonDecode(response.body);
-        final price = data["Global Quote"]?["05. price"] ?? "N/A";
-
-        setState(() {
-          currentPrice = price.toString();
-        });
-      } else {
-        setState(() {
-          currentPrice = "Error";
-        });
+      if (ticker.isEmpty) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Enter a ticker symbol')),
+        );
+        return;
       }
+
+      final price = await StockApiService.fetchStockPrice(ticker);
+
+      setState(() {
+        stockController.text = price.toStringAsFixed(2);
+      });
     } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Error fetching price: $e')),
+      );
+    }
+  }
+
+  void calculate() {
+    try {
+      final stockPrice = double.parse(stockController.text);
+      final strikePrice = double.parse(strikeController.text);
+      final premium = double.parse(premiumController.text);
+      final days = int.parse(daysController.text);
+
+      final calc = CoveredCallCalculator.calculate(
+        stockPrice: stockPrice,
+        strikePrice: strikePrice,
+        premium: premium,
+        daysToExpiration: days,
+      );
+
       setState(() {
-        currentPrice = "Error";
+        result = calc;
       });
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Enter valid numbers in all fields')),
+      );
     }
   }
 
-  void calculateCoveredCall() {
-    final stock = double.tryParse(currentPrice) ?? 0;
-    final strike = double.tryParse(strikeController.text) ?? 0;
-    final premium = double.tryParse(premiumController.text) ?? 0;
-    final days = double.tryParse(daysController.text) ?? 0;
-
-    if (stock == 0 || strike == 0 || premium == 0) {
-      setState(() {
-        result = "Please enter valid inputs.";
-      });
-      return;
-    }
-
-    final breakEven = stock - premium;
-    final maxProfit = (strike - stock) + premium;
-    final returnPct = (premium / stock) * 100;
-    final annualizedReturn =
-        days > 0 ? (premium / stock) * (365 / days) * 100 : 0;
-
-    setState(() {
-      result = """
-Covered Call Analysis
-
-Stock Price: ${stock.toStringAsFixed(2)}
-Strike Price: ${strike.toStringAsFixed(2)}
-Premium: ${premium.toStringAsFixed(2)}
-
-Break-even: ${breakEven.toStringAsFixed(2)}
-Max Profit: ${maxProfit.toStringAsFixed(2)} per share
-
-Return: ${returnPct.toStringAsFixed(2)}%
-Annualized Return: ${annualizedReturn.toStringAsFixed(2)}%
-""";
-    });
-  }
-
-  List<FlSpot> generatePayoffData(
-      double stock, double strike, double premium) {
-    List<FlSpot> points = [];
-
-    for (double price = stock * 0.5;
-        price <= stock * 1.5;
-        price += stock * 0.02) {
-      double profit;
-
-      if (price >= strike) {
-        profit = (strike - stock) + premium;
-      } else {
-        profit = (price - stock) + premium;
-      }
-
-      points.add(FlSpot(price, profit));
-    }
-
-    return points;
-  }
-
-  Widget buildLabel(String text, Color color) {
-    return Row(
-      children: [
-        Container(width: 10, height: 10, color: color),
-        const SizedBox(width: 6),
-        Text(text),
-      ],
+  Widget inputField(String label, TextEditingController controller,
+      {TextInputType type = TextInputType.text}) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 8),
+      child: TextField(
+        controller: controller,
+        keyboardType: type,
+        decoration: InputDecoration(
+          labelText: label,
+          border: const OutlineInputBorder(),
+        ),
+      ),
     );
   }
 
-  Widget buildPayoffChart() {
-    final stock = double.tryParse(currentPrice) ?? 0;
-    final strike = double.tryParse(strikeController.text) ?? 0;
-    final premium = double.tryParse(premiumController.text) ?? 0;
+  Widget resultBox() {
+    if (result == null) return const SizedBox();
 
-    if (stock == 0 || strike == 0 || premium == 0) {
-      return const Text("Enter inputs to view chart");
-    }
-
-    final breakEven = stock - premium;
-    final spots = generatePayoffData(stock, strike, premium);
-
-    return SizedBox(
-      height: 300,
-      child: LineChart(
-        LineChartData(
-          minY: -stock * 0.5,
-          maxY: stock * 0.5,
-
-          gridData: const FlGridData(show: true),
-          titlesData: const FlTitlesData(show: false),
-          borderData: FlBorderData(show: true),
-
-          extraLinesData: ExtraLinesData(
-            horizontalLines: [
-              HorizontalLine(
-                y: 0,
-                color: Colors.grey,
-                strokeWidth: 1,
-              ),
-            ],
-          ),
-
-          lineBarsData: [
-            // Payoff curve
-            LineChartBarData(
-              spots: spots,
-              isCurved: true,
-              dotData: const FlDotData(show: false),
-              barWidth: 3,
-            ),
-
-            // Break-even
-            LineChartBarData(
-              spots: [
-                FlSpot(breakEven, -stock * 0.5),
-                FlSpot(breakEven, stock * 0.5),
-              ],
-              isCurved: false,
-              color: Colors.green,
-              barWidth: 2,
-              dotData: const FlDotData(show: false),
-            ),
-
-            // Strike
-            LineChartBarData(
-              spots: [
-                FlSpot(strike, -stock * 0.5),
-                FlSpot(strike, stock * 0.5),
-              ],
-              isCurved: false,
-              color: Colors.red,
-              barWidth: 2,
-              dotData: const FlDotData(show: false),
-            ),
-          ],
-        ),
+    return Container(
+      margin: const EdgeInsets.only(top: 20),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.grey.shade100,
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text("Max Profit: \$${result!.maxProfit.toStringAsFixed(2)}"),
+          Text("Total Profit: \$${result!.totalProfit.toStringAsFixed(2)}"),
+          Text("Breakeven: \$${result!.breakeven.toStringAsFixed(2)}"),
+          Text("Return: ${(result!.returnPercent * 100).toStringAsFixed(2)}%"),
+          Text("Annualized: ${(result!.annualizedReturn * 100).toStringAsFixed(2)}%"),
+        ],
       ),
     );
   }
@@ -217,112 +130,55 @@ Annualized Return: ${annualizedReturn.toStringAsFixed(2)}%
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text("Covered Call Builder"),
+        title: const Text('Covered Call Calculator'),
       ),
-      body: Padding(
+      body: SingleChildScrollView(
         padding: const EdgeInsets.all(16),
-        child: SingleChildScrollView(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              TextField(
-                controller: tickerController,
-                decoration: const InputDecoration(
-                  labelText: "Ticker (e.g. AAPL)",
-                  border: OutlineInputBorder(),
-                ),
+        child: Column(
+          children: [
+            inputField("Ticker (e.g. AAPL)", tickerController),
+
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton(
+                onPressed: fetchPrice,
+                child: const Text("Fetch Stock Price"),
               ),
+            ),
 
-              const SizedBox(height: 10),
+            inputField(
+              "Stock Price (auto-filled)",
+              stockController,
+              type: TextInputType.number,
+            ),
+            inputField(
+              "Strike Price",
+              strikeController,
+              type: TextInputType.number,
+            ),
+            inputField(
+              "Premium",
+              premiumController,
+              type: TextInputType.number,
+            ),
+            inputField(
+              "Days to Expiration",
+              daysController,
+              type: TextInputType.number,
+            ),
 
-              SizedBox(
-                width: double.infinity,
-                child: ElevatedButton(
-                  onPressed: () {
-                    fetchStockPrice(
-                        tickerController.text.trim().toUpperCase());
-                  },
-                  child: const Text("Get Stock Price"),
-                ),
+            const SizedBox(height: 10),
+
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton(
+                onPressed: calculate,
+                child: const Text("Calculate"),
               ),
+            ),
 
-              const SizedBox(height: 10),
-
-              Text(
-                "Current Price: ${currentPrice}",
-                style: const TextStyle(fontSize: 18),
-              ),
-
-              const SizedBox(height: 20),
-
-              TextField(
-                controller: strikeController,
-                keyboardType: TextInputType.number,
-                decoration: const InputDecoration(
-                  labelText: "Strike Price",
-                  border: OutlineInputBorder(),
-                ),
-              ),
-
-              const SizedBox(height: 10),
-
-              TextField(
-                controller: premiumController,
-                keyboardType: TextInputType.number,
-                decoration: const InputDecoration(
-                  labelText: "Option Premium (per share)",
-                  border: OutlineInputBorder(),
-                ),
-              ),
-
-              const SizedBox(height: 10),
-
-              TextField(
-                controller: daysController,
-                keyboardType: TextInputType.number,
-                decoration: const InputDecoration(
-                  labelText: "Days to Expiration",
-                  border: OutlineInputBorder(),
-                ),
-              ),
-
-              const SizedBox(height: 10),
-
-              SizedBox(
-                width: double.infinity,
-                child: ElevatedButton(
-                  onPressed: calculateCoveredCall,
-                  child: const Text("Calculate Covered Call"),
-                ),
-              ),
-
-              const SizedBox(height: 20),
-
-              Text(result, style: const TextStyle(fontSize: 16)),
-
-              const SizedBox(height: 20),
-
-              const Text(
-                "Payoff Chart",
-                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-              ),
-
-              const SizedBox(height: 10),
-
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                children: [
-                  buildLabel("Payoff", Colors.blue),
-                  buildLabel("Break-even", Colors.green),
-                  buildLabel("Strike", Colors.red),
-                ],
-              ),
-
-              const SizedBox(height: 10),
-
-              buildPayoffChart(),
-            ],
-          ),
+            resultBox(),
+          ],
         ),
       ),
     );
