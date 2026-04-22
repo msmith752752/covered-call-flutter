@@ -39,9 +39,23 @@ class _CoveredCallScreenState extends State<CoveredCallScreen> {
   final daysController = TextEditingController();
 
   CoveredCallResult? result;
+  bool isLoadingPrice = false;
 
-  // 🟢 NEW: Fetch live stock price
+  // Trade Quality Score
+  String getTradeQuality(double annualizedReturn) {
+    if (annualizedReturn >= 0.20) {
+      return "🟢 Strong Trade";
+    } else if (annualizedReturn >= 0.10) {
+      return "🟡 Moderate Trade";
+    } else {
+      return "🔴 Weak Trade";
+    }
+  }
+
+  // Fetch live stock price
   Future<void> fetchPrice() async {
+    setState(() => isLoadingPrice = true);
+
     try {
       final ticker = tickerController.text.trim().toUpperCase();
 
@@ -61,11 +75,23 @@ class _CoveredCallScreenState extends State<CoveredCallScreen> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Error fetching price: $e')),
       );
+    } finally {
+      setState(() => isLoadingPrice = false);
     }
   }
 
   void calculate() {
     try {
+      if (stockController.text.isEmpty ||
+          strikeController.text.isEmpty ||
+          premiumController.text.isEmpty ||
+          daysController.text.isEmpty) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Fill in all fields')),
+        );
+        return;
+      }
+
       final stockPrice = double.parse(stockController.text);
       final strikePrice = double.parse(strikeController.text);
       final premium = double.parse(premiumController.text);
@@ -103,6 +129,23 @@ class _CoveredCallScreenState extends State<CoveredCallScreen> {
     );
   }
 
+  // NEW: Section header widget
+  Widget sectionTitle(String text) {
+    return Padding(
+      padding: const EdgeInsets.only(top: 16, bottom: 8),
+      child: Align(
+        alignment: Alignment.centerLeft,
+        child: Text(
+          text,
+          style: const TextStyle(
+            fontSize: 16,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+      ),
+    );
+  }
+
   Widget resultBox() {
     if (result == null) return const SizedBox();
 
@@ -116,6 +159,15 @@ class _CoveredCallScreenState extends State<CoveredCallScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          Text(
+            getTradeQuality(result!.annualizedReturn),
+            style: const TextStyle(
+              fontSize: 16,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+          const SizedBox(height: 8),
+
           Text("Max Profit: \$${result!.maxProfit.toStringAsFixed(2)}"),
           Text("Total Profit: \$${result!.totalProfit.toStringAsFixed(2)}"),
           Text("Breakeven: \$${result!.breakeven.toStringAsFixed(2)}"),
@@ -136,13 +188,18 @@ class _CoveredCallScreenState extends State<CoveredCallScreen> {
         padding: const EdgeInsets.all(16),
         child: Column(
           children: [
+            // 📊 Market Data
+            sectionTitle("📊 Market Data"),
+
             inputField("Ticker (e.g. AAPL)", tickerController),
 
             SizedBox(
               width: double.infinity,
               child: ElevatedButton(
-                onPressed: fetchPrice,
-                child: const Text("Fetch Stock Price"),
+                onPressed: isLoadingPrice ? null : fetchPrice,
+                child: isLoadingPrice
+                    ? const CircularProgressIndicator()
+                    : const Text("Fetch Stock Price"),
               ),
             ),
 
@@ -151,6 +208,10 @@ class _CoveredCallScreenState extends State<CoveredCallScreen> {
               stockController,
               type: TextInputType.number,
             ),
+
+            // 📈 Trade Setup
+            sectionTitle("📈 Trade Setup"),
+
             inputField(
               "Strike Price",
               strikeController,
@@ -176,6 +237,9 @@ class _CoveredCallScreenState extends State<CoveredCallScreen> {
                 child: const Text("Calculate"),
               ),
             ),
+
+            // 🧮 Results
+            sectionTitle("🧮 Results"),
 
             resultBox(),
           ],
