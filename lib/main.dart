@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:fl_chart/fl_chart.dart';
+
 import 'covered_call_calculator.dart';
 import 'stock_api_service.dart';
 
@@ -12,11 +14,12 @@ class MyApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'Covered Call Calculator',
+      title: 'Covered Call',
       debugShowCheckedModeBanner: false,
       theme: ThemeData(
-        primarySwatch: Colors.blue,
         useMaterial3: true,
+        scaffoldBackgroundColor: const Color(0xFFF6F7FB),
+        colorScheme: ColorScheme.fromSeed(seedColor: Colors.green),
       ),
       home: const CoveredCallScreen(),
     );
@@ -31,7 +34,6 @@ class CoveredCallScreen extends StatefulWidget {
 }
 
 class _CoveredCallScreenState extends State<CoveredCallScreen> {
-  // Controllers
   final tickerController = TextEditingController();
   final stockController = TextEditingController();
   final strikeController = TextEditingController();
@@ -41,121 +43,88 @@ class _CoveredCallScreenState extends State<CoveredCallScreen> {
   CoveredCallResult? result;
   bool isLoadingPrice = false;
 
-  // Trade Quality Score
   String getTradeQuality(double annualizedReturn) {
-    if (annualizedReturn >= 0.20) {
-      return "🟢 Strong Trade";
-    } else if (annualizedReturn >= 0.10) {
-      return "🟡 Moderate Trade";
-    } else {
-      return "🔴 Weak Trade";
-    }
+    if (annualizedReturn >= 0.20) return "Strong Trade 🟢";
+    if (annualizedReturn >= 0.10) return "Moderate Trade 🟡";
+    return "Weak Trade 🔴";
   }
 
-  // Fetch live stock price
   Future<void> fetchPrice() async {
     setState(() => isLoadingPrice = true);
 
     try {
       final ticker = tickerController.text.trim().toUpperCase();
-
-      if (ticker.isEmpty) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Enter a ticker symbol')),
-        );
-        return;
-      }
+      if (ticker.isEmpty) return;
 
       final price = await StockApiService.fetchStockPrice(ticker);
 
       setState(() {
         stockController.text = price.toStringAsFixed(2);
       });
-    } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Error fetching price: $e')),
-      );
     } finally {
       setState(() => isLoadingPrice = false);
     }
   }
 
   void calculate() {
-    try {
-      if (stockController.text.isEmpty ||
-          strikeController.text.isEmpty ||
-          premiumController.text.isEmpty ||
-          daysController.text.isEmpty) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Fill in all fields')),
-        );
-        return;
-      }
+    final stockPrice = double.parse(stockController.text);
+    final strikePrice = double.parse(strikeController.text);
+    final premium = double.parse(premiumController.text);
+    final days = int.parse(daysController.text);
 
-      final stockPrice = double.parse(stockController.text);
-      final strikePrice = double.parse(strikeController.text);
-      final premium = double.parse(premiumController.text);
-      final days = int.parse(daysController.text);
+    final calc = CoveredCallCalculator.calculate(
+      stockPrice: stockPrice,
+      strikePrice: strikePrice,
+      premium: premium,
+      daysToExpiration: days,
+    );
 
-      final calc = CoveredCallCalculator.calculate(
-        stockPrice: stockPrice,
-        strikePrice: strikePrice,
-        premium: premium,
-        daysToExpiration: days,
-      );
-
-      setState(() {
-        result = calc;
-      });
-    } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Enter valid numbers in all fields')),
-      );
-    }
+    setState(() => result = calc);
   }
 
-  Widget inputField(String label, TextEditingController controller,
-      {TextInputType type = TextInputType.text}) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 8),
-      child: TextField(
-        controller: controller,
-        keyboardType: type,
-        decoration: InputDecoration(
-          labelText: label,
-          border: const OutlineInputBorder(),
-        ),
+  Widget card({required Widget child}) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 14),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.05),
+            blurRadius: 12,
+            offset: const Offset(0, 6),
+          )
+        ],
       ),
+      child: child,
     );
   }
 
-  // NEW: Section header widget
-  Widget sectionTitle(String text) {
+  Widget input(TextEditingController c, String label,
+      {TextInputType type = TextInputType.text}) {
     return Padding(
-      padding: const EdgeInsets.only(top: 16, bottom: 8),
-      child: Align(
-        alignment: Alignment.centerLeft,
-        child: Text(
-          text,
-          style: const TextStyle(
-            fontSize: 16,
-            fontWeight: FontWeight.bold,
+      padding: const EdgeInsets.only(bottom: 12),
+      child: TextField(
+        controller: c,
+        keyboardType: type,
+        decoration: InputDecoration(
+          labelText: label,
+          filled: true,
+          fillColor: const Color(0xFFF2F3F5),
+          border: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(12),
+            borderSide: BorderSide.none,
           ),
         ),
       ),
     );
   }
 
-  Widget resultBox() {
+  Widget buildResult() {
     if (result == null) return const SizedBox();
 
-    return Container(
-      margin: const EdgeInsets.only(top: 20),
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Colors.grey.shade100,
-        borderRadius: BorderRadius.circular(12),
-      ),
+    return card(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -166,14 +135,57 @@ class _CoveredCallScreenState extends State<CoveredCallScreen> {
               fontWeight: FontWeight.bold,
             ),
           ),
-          const SizedBox(height: 8),
-
+          const SizedBox(height: 12),
           Text("Max Profit: \$${result!.maxProfit.toStringAsFixed(2)}"),
           Text("Total Profit: \$${result!.totalProfit.toStringAsFixed(2)}"),
           Text("Breakeven: \$${result!.breakeven.toStringAsFixed(2)}"),
           Text("Return: ${(result!.returnPercent * 100).toStringAsFixed(2)}%"),
-          Text("Annualized: ${(result!.annualizedReturn * 100).toStringAsFixed(2)}%"),
+          Text(
+              "Annualized: ${(result!.annualizedReturn * 100).toStringAsFixed(2)}%"),
         ],
+      ),
+    );
+  }
+
+  Widget profitChart() {
+    if (result == null) return const SizedBox();
+
+    final stock = double.tryParse(stockController.text) ?? 0;
+    final premium = double.tryParse(premiumController.text) ?? 0;
+    final baseStrike = double.tryParse(strikeController.text) ?? stock;
+
+    final List<FlSpot> spots = [];
+
+    for (double s = baseStrike - 10; s <= baseStrike + 10; s += 2) {
+      double profit;
+
+      if (stock >= s) {
+        profit = (s - stock) + premium;
+      } else {
+        profit = premium;
+      }
+
+      spots.add(FlSpot(s, profit));
+    }
+
+    return card(
+      child: SizedBox(
+        height: 220,
+        child: LineChart(
+          LineChartData(
+            gridData: const FlGridData(show: false),
+            titlesData: const FlTitlesData(show: false),
+            borderData: FlBorderData(show: false),
+            lineBarsData: [
+              LineChartBarData(
+                spots: spots,
+                isCurved: true,
+                barWidth: 3,
+                dotData: const FlDotData(show: false),
+              )
+            ],
+          ),
+        ),
       ),
     );
   }
@@ -182,68 +194,73 @@ class _CoveredCallScreenState extends State<CoveredCallScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Covered Call Calculator'),
+        title: const Text("Covered Call"),
       ),
-      body: SingleChildScrollView(
+      body: ListView(
         padding: const EdgeInsets.all(16),
-        child: Column(
-          children: [
-            // 📊 Market Data
-            sectionTitle("📊 Market Data"),
-
-            inputField("Ticker (e.g. AAPL)", tickerController),
-
-            SizedBox(
-              width: double.infinity,
-              child: ElevatedButton(
-                onPressed: isLoadingPrice ? null : fetchPrice,
-                child: isLoadingPrice
-                    ? const CircularProgressIndicator()
-                    : const Text("Fetch Stock Price"),
-              ),
+        children: [
+          // MARKET
+          card(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text("Market",
+                    style:
+                        TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                const SizedBox(height: 12),
+                input(tickerController, "Ticker (AAPL)"),
+                ElevatedButton(
+                  onPressed: isLoadingPrice ? null : fetchPrice,
+                  style: ElevatedButton.styleFrom(
+                    minimumSize: const Size.fromHeight(45),
+                  ),
+                  child: isLoadingPrice
+                      ? const CircularProgressIndicator()
+                      : const Text("Get Price"),
+                ),
+                const SizedBox(height: 12),
+                input(stockController, "Stock Price",
+                    type: TextInputType.number),
+              ],
             ),
+          ),
 
-            inputField(
-              "Stock Price (auto-filled)",
-              stockController,
-              type: TextInputType.number,
+          // TRADE SETUP
+          card(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text("Trade Setup",
+                    style:
+                        TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                const SizedBox(height: 12),
+                input(strikeController, "Strike Price",
+                    type: TextInputType.number),
+                input(premiumController, "Premium",
+                    type: TextInputType.number),
+                input(daysController, "Days to Expiration",
+                    type: TextInputType.number),
+                const SizedBox(height: 6),
+                ElevatedButton(
+                  onPressed: calculate,
+                  style: ElevatedButton.styleFrom(
+                    minimumSize: const Size.fromHeight(45),
+                    backgroundColor: Colors.green,
+                    foregroundColor: Colors.white,
+                  ),
+                  child: const Text("Calculate Trade"),
+                ),
+              ],
             ),
+          ),
 
-            // 📈 Trade Setup
-            sectionTitle("📈 Trade Setup"),
+          const SizedBox(height: 6),
 
-            inputField(
-              "Strike Price",
-              strikeController,
-              type: TextInputType.number,
-            ),
-            inputField(
-              "Premium",
-              premiumController,
-              type: TextInputType.number,
-            ),
-            inputField(
-              "Days to Expiration",
-              daysController,
-              type: TextInputType.number,
-            ),
-
-            const SizedBox(height: 10),
-
-            SizedBox(
-              width: double.infinity,
-              child: ElevatedButton(
-                onPressed: calculate,
-                child: const Text("Calculate"),
-              ),
-            ),
-
-            // 🧮 Results
-            sectionTitle("🧮 Results"),
-
-            resultBox(),
-          ],
-        ),
+          // RESULTS + CHART
+          buildResult(),
+          const SizedBox(height: 12),
+          profitChart(),
+        ],
       ),
     );
   }
