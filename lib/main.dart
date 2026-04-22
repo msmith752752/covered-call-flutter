@@ -40,6 +40,9 @@ class _CoveredCallScreenState extends State<CoveredCallScreen> {
   final premiumController = TextEditingController();
   final daysController = TextEditingController();
 
+  // NEW: Cost basis
+  final costBasisController = TextEditingController();
+
   CoveredCallResult? result;
   bool isLoadingPrice = false;
 
@@ -124,6 +127,15 @@ class _CoveredCallScreenState extends State<CoveredCallScreen> {
   Widget buildResult() {
     if (result == null) return const SizedBox();
 
+    // NEW CALCULATIONS
+    final stockPrice = double.tryParse(stockController.text) ?? 0;
+    final costBasis = double.tryParse(costBasisController.text) ?? 0;
+    final premium = double.tryParse(premiumController.text) ?? 0;
+
+    final stockPnL = stockPrice - costBasis;
+    final totalPnL = stockPnL + premium;
+    final roi = costBasis > 0 ? (totalPnL / costBasis) : 0;
+
     return card(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -135,13 +147,21 @@ class _CoveredCallScreenState extends State<CoveredCallScreen> {
               fontWeight: FontWeight.bold,
             ),
           ),
+
           const SizedBox(height: 12),
+
+          // Existing option metrics
           Text("Max Profit: \$${result!.maxProfit.toStringAsFixed(2)}"),
-          Text("Total Profit: \$${result!.totalProfit.toStringAsFixed(2)}"),
+          Text("Total Profit (Option): \$${result!.totalProfit.toStringAsFixed(2)}"),
           Text("Breakeven: \$${result!.breakeven.toStringAsFixed(2)}"),
-          Text("Return: ${(result!.returnPercent * 100).toStringAsFixed(2)}%"),
-          Text(
-              "Annualized: ${(result!.annualizedReturn * 100).toStringAsFixed(2)}%"),
+
+          const Divider(height: 20),
+
+          // NEW: Position-level metrics
+          Text("Stock P&L: \$${stockPnL.toStringAsFixed(2)}"),
+          Text("Premium Income: \$${premium.toStringAsFixed(2)}"),
+          Text("Total Position P&L: \$${totalPnL.toStringAsFixed(2)}"),
+          Text("ROI: ${(roi * 100).toStringAsFixed(2)}%"),
         ],
       ),
     );
@@ -221,6 +241,10 @@ class _CoveredCallScreenState extends State<CoveredCallScreen> {
                 const SizedBox(height: 12),
                 input(stockController, "Stock Price",
                     type: TextInputType.number),
+
+                // NEW: Cost Basis
+                input(costBasisController, "Cost Basis",
+                    type: TextInputType.number),
               ],
             ),
           ),
@@ -256,7 +280,6 @@ class _CoveredCallScreenState extends State<CoveredCallScreen> {
 
           const SizedBox(height: 6),
 
-          // RESULTS + CHART
           buildResult(),
           const SizedBox(height: 12),
           profitChart(),
