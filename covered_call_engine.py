@@ -1,58 +1,136 @@
 import argparse
+import os
+from datetime import datetime
 import yfinance as yf
-from alpaca.trading.client import TradingClient
+import pandas as pd
+
+# Optional Alpaca import
+try:
+    from alpaca.trading.client import TradingClient
+except Exception:
+    TradingClient = None
 
 # =====================================================
 # CONFIG
 # =====================================================
-API_KEY = "PKFVE3ZAZFMWYSTVOOY4ZFLWIO"
-SECRET_KEY = "2oXUzQyfdoU65yLveBbxQYEm99GVTYsEZGGBKNvFXjrs"
+API_KEY = os.getenv("PKFVE3ZAZFMWYSTVOOY4ZFLWIO")
+SECRET_KEY = os.getenv("2oXUzQyfdoU65yLveBbxQYEm99GVTYsEZGGBKNvFXjrs")
 
-client = TradingClient(API_KEY, SECRET_KEY, paper=True)
+# Safe client initialization
+if TradingClient and API_KEY and SECRET_KEY:
+    try:
+        client = TradingClient(API_KEY, SECRET_KEY, paper=True)
+    except Exception:
+        client = None
+else:
+    client = None
 
 # =====================================================
 # DATA LAYER
 # =====================================================
 def get_price(symbol):
-    ticker = yf.Ticker(symbol)
-    data = ticker.history(period="1d")
+    try:
+        ticker = yf.Ticker(symbol)
+        data = ticker.history(period="1d")
 
-    if data.empty:
+        if data.empty:
+            return None
+
+        return float(data["Close"].iloc[-1])
+    except Exception:
         return None
 
-    return float(data["Close"].iloc[-1])
+
+def get_options_chain(symbol):
+    try:
+        ticker = yf.Ticker(symbol)
+        expirations = ticker.options
+
+        all_calls = []
+
+        for exp in expirations:
+            try:
+                chain = ticker.option_chain(exp)
+                calls = chain.calls.copy()
+
+                calls["expiration"] = exp
+                calls["dte"] = (
+                    datetime.strptime(exp, "%Y-%m-%d") - datetime.today()
+                ).days
+
+                all_calls.append(calls)
+
+            except Exception:
+                continue
+
+        if not all_calls:
+            return None
+
+        return pd.concat(all_calls, ignore_index=True)
+
+    except Exception:
+        return None
+
 
 # =====================================================
 # BROKERAGE LAYER
 # =====================================================
 def get_positions():
+    if client is None:
+        return {}
+
     try:
         positions = client.get_all_positions()
         return {p.symbol: int(float(p.qty)) for p in positions}
     except Exception:
         return {}
 
+
 # =====================================================
 # STRATEGY LAYER
 # =====================================================
-def generate_covered_call(symbol, price):
-    volatility_map = {
-        "AAPL": 0.008,
-        "MSFT": 0.007,
-        "TSLA": 0.015,
-        "NVDA": 0.012
-    }
+def generate_covered_call(symbol, price, min_dte=7, max_dte=30):
+    options = get_options_chain(symbol)
 
-    vol = volatility_map.get(symbol, 0.01)
+    if options is None:
+        return None
 
-    strike = round(price * 1.03, 2)
-    premium = round(price * vol, 2)
-    yield_pct = round((premium / price) * 100, 2)
+    try:
+        # ✅ ONLY CHANGE: added volume filter
+        filtered = options[
+    (options["strike"] > price) &
+    (options["strike"] <= price * 1.05) &   # NEW RULE
+    (options["strike"] >= price * 1.01) &   # NEW RULE
+    (options["dte"] >= min_dte) &
+    (options["dte"] <= max_dte) &
+    (options["bid"] > 0) &
+    (options["volume"] > 50) &
+((options["bid"] / options["ask"]) >= 0.6)
+].copy()
 
-    return strike, premium, yield_pct
+        if filtered.empty:
+            return None
+
+        # Yield calculation
+        filtered["yield"] = (filtered["bid"] / price) * 100
+
+        # Pick best option
+        best = filtered.sort_values(by="yield", ascending=False).iloc[0]
+
+        return {
+            "strike": round(best["strike"], 2),
+            "premium": round(best["bid"], 2),
+            "yield": round(best["yield"], 2),
+            "expiration": best["expiration"],
+            "dte": int(best["dte"])
+        }
+
+    except Exception:
+        return None
+
 
 # =====================================================
-# ANALYSIS FUNCTION
+# ANALYSIS
 # =====================================================
 def analyze(symbol, positions):
     price = get_price(symbol)
@@ -60,20 +138,27 @@ def analyze(symbol, positions):
     if price is None:
         return None
 
-    strike, premium, yield_pct = generate_covered_call(symbol, price)
+    cc = generate_covered_call(symbol, price)
+
+    if cc is None:
+        return None
+
     shares = positions.get(symbol, 0)
 
     return {
         "symbol": symbol,
         "price": price,
-        "strike": strike,
-        "premium": premium,
-        "yield": yield_pct,
+        "strike": cc["strike"],
+        "premium": cc["premium"],
+        "yield": cc["yield"],
+        "expiration": cc["expiration"],
+        "dte": cc["dte"],
         "shares": shares
     }
 
+
 # =====================================================
-# SCANNER MODE (TABLE OUTPUT)
+# SCANNER MODE
 # =====================================================
 def run_scan(symbols):
     print("\n======================================")
@@ -88,34 +173,36 @@ def run_scan(symbols):
         if result:
             results.append(result)
 
-    # Sort by yield (best first)
+    if not results:
+        print("No valid results found.")
+        return
+
+    # Sort by yield
     results.sort(key=lambda x: x["yield"], reverse=True)
 
-    # Header row
-    print(f"{'SYMBOL':<8}{'PRICE':<12}{'STRIKE':<12}{'PREMIUM':<12}{'YIELD %':<10}{'SHARES':<10}")
-    print("-" * 70)
+    print(f"{'SYMBOL':<8}{'PRICE':<10}{'STRIKE':<10}{'PREM':<10}{'YIELD':<8}{'DTE':<6}{'SHARES':<10}")
+    print("-" * 75)
 
-    # Data rows
     for r in results:
         print(f"{r['symbol']:<8}"
-              f"${r['price']:<11.2f}"
-              f"${r['strike']:<11.2f}"
-              f"${r['premium']:<11.2f}"
-              f"{r['yield']:<10.2f}"
+              f"${r['price']:<9.2f}"
+              f"${r['strike']:<9.2f}"
+              f"${r['premium']:<9.2f}"
+              f"{r['yield']:<8.2f}"
+              f"{r['dte']:<6}"
               f"{r['shares']:<10}")
 
-    print("\n")
-
-    # Top recommendation
     best = results[0]
 
-    print("======================================")
+    print("\n======================================")
     print(" TOP RECOMMENDATION")
     print("======================================")
     print(f"Symbol: {best['symbol']}")
     print(f"Yield: {best['yield']}%")
     print(f"Premium: ${best['premium']}")
-    print("Reason: Highest covered call yield in scan universe")
+    print(f"Expiration: {best['expiration']} ({best['dte']} days)")
+    print("Reason: Highest yield within selected DTE range")
+
 
 # =====================================================
 # SINGLE MODE
@@ -123,6 +210,10 @@ def run_scan(symbols):
 def run_single(symbol):
     positions = get_positions()
     result = analyze(symbol, positions)
+
+    if result is None:
+        print("No valid data found.")
+        return
 
     print("\n==============================")
     print(" COVERED CALL ENGINE")
@@ -132,9 +223,10 @@ def run_single(symbol):
     print(f"Current Price: ${result['price']:.2f}")
 
     print("\n--- Covered Call Suggestion ---")
-    print(f"Suggested Strike: ${result['strike']}")
-    print(f"Estimated Premium: ${result['premium']}")
-    print(f"Estimated Yield: {result['yield']}%")
+    print(f"Strike: ${result['strike']}")
+    print(f"Premium: ${result['premium']}")
+    print(f"Yield: {result['yield']}%")
+    print(f"Expiration: {result['expiration']} ({result['dte']} days)")
 
     print("\n--- Position Check ---")
     print(f"Shares Owned: {result['shares']}")
@@ -143,6 +235,7 @@ def run_single(symbol):
         print("Status: Eligible for covered call")
     else:
         print("Status: NOT eligible (need 100 shares)")
+
 
 # =====================================================
 # CLI ENTRY
