@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:fl_chart/fl_chart.dart';
+import 'package:intl/intl.dart';
 
 import 'covered_call_calculator.dart';
 import 'stock_api_service.dart';
@@ -39,9 +40,9 @@ class _CoveredCallScreenState extends State<CoveredCallScreen> {
   final strikeController = TextEditingController();
   final premiumController = TextEditingController();
   final daysController = TextEditingController();
-
-  // NEW: Cost basis
   final costBasisController = TextEditingController();
+
+  final currencyFormatter = NumberFormat.currency(symbol: '\$');
 
   CoveredCallResult? result;
   bool isLoadingPrice = false;
@@ -63,6 +64,10 @@ class _CoveredCallScreenState extends State<CoveredCallScreen> {
 
       setState(() {
         stockController.text = price.toStringAsFixed(2);
+
+        if (costBasisController.text.isEmpty) {
+          costBasisController.text = price.toStringAsFixed(2);
+        }
       });
     } finally {
       setState(() => isLoadingPrice = false);
@@ -70,10 +75,20 @@ class _CoveredCallScreenState extends State<CoveredCallScreen> {
   }
 
   void calculate() {
-    final stockPrice = double.parse(stockController.text);
-    final strikePrice = double.parse(strikeController.text);
-    final premium = double.parse(premiumController.text);
-    final days = int.parse(daysController.text);
+    final stockPrice = double.tryParse(stockController.text);
+    final strikePrice = double.tryParse(strikeController.text);
+    final premium = double.tryParse(premiumController.text);
+    final days = int.tryParse(daysController.text);
+
+    if (stockPrice == null ||
+        strikePrice == null ||
+        premium == null ||
+        days == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("Please enter valid numeric values")),
+      );
+      return;
+    }
 
     final calc = CoveredCallCalculator.calculate(
       stockPrice: stockPrice,
@@ -127,7 +142,6 @@ class _CoveredCallScreenState extends State<CoveredCallScreen> {
   Widget buildResult() {
     if (result == null) return const SizedBox();
 
-    // NEW CALCULATIONS
     final stockPrice = double.tryParse(stockController.text) ?? 0;
     final costBasis = double.tryParse(costBasisController.text) ?? 0;
     final premium = double.tryParse(premiumController.text) ?? 0;
@@ -147,20 +161,25 @@ class _CoveredCallScreenState extends State<CoveredCallScreen> {
               fontWeight: FontWeight.bold,
             ),
           ),
-
           const SizedBox(height: 12),
 
-          // Existing option metrics
-          Text("Max Profit: \$${result!.maxProfit.toStringAsFixed(2)}"),
-          Text("Total Profit (Option): \$${result!.totalProfit.toStringAsFixed(2)}"),
-          Text("Breakeven: \$${result!.breakeven.toStringAsFixed(2)}"),
+          Text("Max Profit: ${currencyFormatter.format(result!.maxProfit)}"),
+          Text("Total Profit (Option): ${currencyFormatter.format(result!.totalProfit)}"),
+          Text("Breakeven: ${currencyFormatter.format(result!.breakeven)}"),
 
           const Divider(height: 20),
 
-          // NEW: Position-level metrics
-          Text("Stock P&L: \$${stockPnL.toStringAsFixed(2)}"),
-          Text("Premium Income: \$${premium.toStringAsFixed(2)}"),
-          Text("Total Position P&L: \$${totalPnL.toStringAsFixed(2)}"),
+          Text("Stock P&L: ${currencyFormatter.format(stockPnL)}"),
+          Text("Premium Income: ${currencyFormatter.format(premium)}"),
+
+          Text(
+            "Total Position P&L: ${currencyFormatter.format(totalPnL)}",
+            style: TextStyle(
+              color: totalPnL >= 0 ? Colors.green : Colors.red,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+
           Text("ROI: ${(roi * 100).toStringAsFixed(2)}%"),
         ],
       ),
@@ -219,14 +238,12 @@ class _CoveredCallScreenState extends State<CoveredCallScreen> {
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [
-          // MARKET
           card(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 const Text("Market",
-                    style:
-                        TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
                 const SizedBox(height: 12),
                 input(tickerController, "Ticker (AAPL)"),
                 ElevatedButton(
@@ -241,22 +258,18 @@ class _CoveredCallScreenState extends State<CoveredCallScreen> {
                 const SizedBox(height: 12),
                 input(stockController, "Stock Price",
                     type: TextInputType.number),
-
-                // NEW: Cost Basis
                 input(costBasisController, "Cost Basis",
                     type: TextInputType.number),
               ],
             ),
           ),
 
-          // TRADE SETUP
           card(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 const Text("Trade Setup",
-                    style:
-                        TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
                 const SizedBox(height: 12),
                 input(strikeController, "Strike Price",
                     type: TextInputType.number),
@@ -279,7 +292,6 @@ class _CoveredCallScreenState extends State<CoveredCallScreen> {
           ),
 
           const SizedBox(height: 6),
-
           buildResult(),
           const SizedBox(height: 12),
           profitChart(),
