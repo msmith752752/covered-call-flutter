@@ -3,7 +3,7 @@ import yfinance as yf
 from alpaca.trading.client import TradingClient
 
 # =====================================================
-# CONFIG (Alpaca Paper Trading)
+# CONFIG
 # =====================================================
 API_KEY = "PKFVE3ZAZFMWYSTVOOY4ZFLWIO"
 SECRET_KEY = "2oXUzQyfdoU65yLveBbxQYEm99GVTYsEZGGBKNvFXjrs"
@@ -33,14 +33,9 @@ def get_positions():
         return {}
 
 # =====================================================
-# STRATEGY LAYER (IMPROVED MODEL)
+# STRATEGY LAYER
 # =====================================================
 def generate_covered_call(symbol, price):
-    """
-    Volatility-based premium approximation.
-    (Simplified model for portfolio/demo purposes)
-    """
-
     volatility_map = {
         "AAPL": 0.008,
         "MSFT": 0.007,
@@ -78,7 +73,52 @@ def analyze(symbol, positions):
     }
 
 # =====================================================
-# SINGLE SYMBOL MODE
+# SCANNER MODE (TABLE OUTPUT)
+# =====================================================
+def run_scan(symbols):
+    print("\n======================================")
+    print(" COVERED CALL SCANNER")
+    print("======================================\n")
+
+    positions = get_positions()
+    results = []
+
+    for symbol in symbols:
+        result = analyze(symbol, positions)
+        if result:
+            results.append(result)
+
+    # Sort by yield (best first)
+    results.sort(key=lambda x: x["yield"], reverse=True)
+
+    # Header row
+    print(f"{'SYMBOL':<8}{'PRICE':<12}{'STRIKE':<12}{'PREMIUM':<12}{'YIELD %':<10}{'SHARES':<10}")
+    print("-" * 70)
+
+    # Data rows
+    for r in results:
+        print(f"{r['symbol']:<8}"
+              f"${r['price']:<11.2f}"
+              f"${r['strike']:<11.2f}"
+              f"${r['premium']:<11.2f}"
+              f"{r['yield']:<10.2f}"
+              f"{r['shares']:<10}")
+
+    print("\n")
+
+    # Top recommendation
+    best = results[0]
+
+    print("======================================")
+    print(" TOP RECOMMENDATION")
+    print("======================================")
+    print(f"Symbol: {best['symbol']}")
+    print(f"Yield: {best['yield']}%")
+    print(f"Premium: ${best['premium']}")
+    print("Reason: Highest covered call yield in scan universe")
+
+# =====================================================
+# SINGLE MODE
 # =====================================================
 def run_single(symbol):
     positions = get_positions()
@@ -105,35 +145,7 @@ def run_single(symbol):
         print("Status: NOT eligible (need 100 shares)")
 
 # =====================================================
-# SCANNER MODE
-# =====================================================
-def run_scan(symbols):
-    print("\n==============================")
-    print(" COVERED CALL SCANNER")
-    print("==============================\n")
-
-    positions = get_positions()
-    results = []
-
-    for symbol in symbols:
-        result = analyze(symbol, positions)
-        if result:
-            results.append(result)
-
-    # rank by yield (best first)
-    results.sort(key=lambda x: x["yield"], reverse=True)
-
-    for r in results:
-        print(f"{r['symbol']}")
-        print(f"  Price: ${r['price']:.2f}")
-        print(f"  Strike: ${r['strike']}")
-        print(f"  Premium: ${r['premium']}")
-        print(f"  Yield: {r['yield']}%")
-        print(f"  Shares: {r['shares']}")
-        print("")
-
-# =====================================================
-# CLI ENTRY POINT
+# CLI ENTRY
 # =====================================================
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Covered Call Trading Assistant")
