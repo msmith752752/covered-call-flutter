@@ -1,3 +1,5 @@
+import sys
+import argparse
 import yfinance as yf
 from alpaca.trading.client import TradingClient
 
@@ -42,38 +44,29 @@ def generate_covered_call(price):
     premium = round(price * 0.01, 2)
     yield_pct = round((premium / price) * 100, 2)
 
-    return {
-        "strike": strike,
-        "premium": premium,
-        "yield_pct": yield_pct
-    }
+    return strike, premium, yield_pct
 
 # =====================================================
-# MAIN ENGINE
+# ENGINE
 # =====================================================
 def run(symbol):
     print("\n==============================")
-    print(" COVERED CALL ENGINE (v1)")
+    print(" COVERED CALL ENGINE (CLI)")
     print("==============================\n")
 
-    # 1. Get price (Yahoo Finance)
     price = get_price(symbol)
-
-    # 2. Get positions (Alpaca)
     positions = get_positions()
     shares = positions.get(symbol, 0)
 
-    # 3. Generate strategy output
-    suggestion = generate_covered_call(price)
+    strike, premium, yield_pct = generate_covered_call(price)
 
-    # 4. Output results
-    print(f"Symbol: {symbol}")
-    print(f"Current Price: ${price}")
+    print(f"Symbol: {symbol.upper()}")
+    print(f"Current Price: ${price:.2f}")
 
     print("\n--- Covered Call Suggestion ---")
-    print(f"Suggested Strike: ${suggestion['strike']}")
-    print(f"Estimated Premium: ${suggestion['premium']}")
-    print(f"Estimated Yield: {suggestion['yield_pct']}%")
+    print(f"Suggested Strike: ${strike}")
+    print(f"Estimated Premium: ${premium}")
+    print(f"Estimated Yield: {yield_pct}%")
 
     print("\n--- Position Check ---")
     print(f"Shares Owned: {shares}")
@@ -84,7 +77,18 @@ def run(symbol):
         print("Status: NOT eligible (need 100 shares)")
 
 # =====================================================
-# ENTRY POINT
+# CLI ENTRY POINT
 # =====================================================
 if __name__ == "__main__":
-    run("AAPL")
+    parser = argparse.ArgumentParser(description="Covered Call Trading Assistant")
+
+    parser.add_argument(
+        "--symbol",
+        type=str,
+        required=True,
+        help="Stock symbol (e.g. AAPL, TSLA, NVDA)"
+    )
+
+    args = parser.parse_args()
+
+    run(args.symbol.upper())
