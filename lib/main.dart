@@ -156,10 +156,7 @@ class _CoveredCallScreenState extends State<CoveredCallScreen> {
         children: [
           Text(
             getTradeQuality(result!.annualizedReturn),
-            style: const TextStyle(
-              fontSize: 16,
-              fontWeight: FontWeight.bold,
-            ),
+            style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
           ),
           const SizedBox(height: 12),
 
@@ -191,17 +188,20 @@ class _CoveredCallScreenState extends State<CoveredCallScreen> {
 
     final stock = double.tryParse(stockController.text) ?? 0;
     final premium = double.tryParse(premiumController.text) ?? 0;
-    final baseStrike = double.tryParse(strikeController.text) ?? stock;
+    final strike = double.tryParse(strikeController.text) ?? stock;
+    final costBasis = double.tryParse(costBasisController.text) ?? stock;
+
+    final breakEven = costBasis - premium;
 
     final List<FlSpot> spots = [];
 
-    for (double s = baseStrike - 10; s <= baseStrike + 10; s += 2) {
+    for (double s = strike - 15; s <= strike + 15; s += 1) {
       double profit;
 
-      if (stock >= s) {
-        profit = (s - stock) + premium;
+      if (s >= strike) {
+        profit = (strike - stock) + premium;
       } else {
-        profit = premium;
+        profit = (s - stock) + premium;
       }
 
       spots.add(FlSpot(s, profit));
@@ -209,20 +209,82 @@ class _CoveredCallScreenState extends State<CoveredCallScreen> {
 
     return card(
       child: SizedBox(
-        height: 220,
+        height: 260,
         child: LineChart(
           LineChartData(
-            gridData: const FlGridData(show: false),
-            titlesData: const FlTitlesData(show: false),
-            borderData: FlBorderData(show: false),
+            minY: spots.map((e) => e.y).reduce((a, b) => a < b ? a : b) - 10,
+            maxY: spots.map((e) => e.y).reduce((a, b) => a > b ? a : b) + 10,
+
+            gridData: const FlGridData(show: true),
+
+            titlesData: FlTitlesData(
+              bottomTitles: AxisTitles(
+                sideTitles: SideTitles(
+                  showTitles: true,
+                  interval: 5,
+                  getTitlesWidget: (value, meta) {
+                    return Text(
+                      value.toStringAsFixed(0),
+                      style: const TextStyle(fontSize: 10),
+                    );
+                  },
+                ),
+                axisNameWidget: const Text("Stock Price"),
+                axisNameSize: 22,
+              ),
+              leftTitles: AxisTitles(
+                sideTitles: SideTitles(
+                  showTitles: true,
+                  interval: 10,
+                  getTitlesWidget: (value, meta) {
+                    return Text(
+                      value.toStringAsFixed(0),
+                      style: const TextStyle(fontSize: 10),
+                    );
+                  },
+                ),
+                axisNameWidget: const Text("Profit / Loss"),
+                axisNameSize: 22,
+              ),
+              topTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+              rightTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+            ),
+
+            borderData: FlBorderData(show: true),
+
             lineBarsData: [
               LineChartBarData(
                 spots: spots,
                 isCurved: true,
                 barWidth: 3,
                 dotData: const FlDotData(show: false),
-              )
+                color: Colors.green,
+              ),
             ],
+
+            extraLinesData: ExtraLinesData(
+              horizontalLines: [
+                HorizontalLine(
+                  y: 0,
+                  color: Colors.grey,
+                  strokeWidth: 1,
+                ),
+                HorizontalLine(
+                  y: breakEven,
+                  color: Colors.blue,
+                  strokeWidth: 2,
+                  dashArray: [6, 4],
+                ),
+              ],
+              verticalLines: [
+                VerticalLine(
+                  x: strike,
+                  color: Colors.red,
+                  strokeWidth: 2,
+                  dashArray: [6, 4],
+                ),
+              ],
+            ),
           ),
         ),
       ),
@@ -232,9 +294,7 @@ class _CoveredCallScreenState extends State<CoveredCallScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: const Text("Covered Call"),
-      ),
+      appBar: AppBar(title: const Text("Covered Call")),
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [
@@ -248,9 +308,6 @@ class _CoveredCallScreenState extends State<CoveredCallScreen> {
                 input(tickerController, "Ticker (AAPL)"),
                 ElevatedButton(
                   onPressed: isLoadingPrice ? null : fetchPrice,
-                  style: ElevatedButton.styleFrom(
-                    minimumSize: const Size.fromHeight(45),
-                  ),
                   child: isLoadingPrice
                       ? const CircularProgressIndicator()
                       : const Text("Get Price"),
@@ -281,9 +338,9 @@ class _CoveredCallScreenState extends State<CoveredCallScreen> {
                 ElevatedButton(
                   onPressed: calculate,
                   style: ElevatedButton.styleFrom(
-                    minimumSize: const Size.fromHeight(45),
                     backgroundColor: Colors.green,
                     foregroundColor: Colors.white,
+                    minimumSize: const Size.fromHeight(45),
                   ),
                   child: const Text("Calculate Trade"),
                 ),
