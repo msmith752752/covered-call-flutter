@@ -1,106 +1,97 @@
-📊 Covered Call Analyzer (Flutter + Real-Time Market Data)
+# 📊 Covered Call Options Analysis Engine
 
-A mobile-first financial analytics app built with Flutter that helps investors evaluate covered call options strategies using real-time stock prices, payoff modeling, and risk visualization.
+A Python-based options analysis tool that scans real market data to identify potential covered call opportunities using live option chains, liquidity filters, and risk constraints.
 
-🎯 Project Overview
+---
 
-This project goes beyond a simple calculator. It demonstrates real-world fintech engineering concepts including:
+## 🚀 What This Project Does
 
-Live market data integration (REST API)
-Options strategy modeling (covered calls)
-Financial return analytics (ROI, breakeven, annualized return)
-Defensive UI design with input validation
-Data visualization with payoff charts
-Clean separation of UI, API services, and calculation logic
-🚀 Key Features
-📡 Market Data
-Live stock price lookup via external API (Alpha Vantage)
-Auto-fill current price into trade setup
-🧮 Covered Call Analytics
-Max profit calculation
-Total profit (including premium)
-Break-even price analysis
-ROI calculation on capital invested
-Annualized return estimation
-🛡️ Input Safety & UX
-Input validation to prevent crashes
-Graceful error handling with user feedback
-Automatic cost basis pre-fill from market price
-💰 Financial Formatting
-Clean currency formatting using intl
-Comma-separated values (e.g. $1,250.00)
-Proper handling of negative values (loss display)
-📈 Payoff Visualization
-Interactive payoff chart using fl_chart
-Strike price marker (red vertical line)
-Break-even line (blue dashed line)
-Zero-profit reference line
-Dynamic scaling for readability
-Axis labels for stock price and profit/loss
-🧠 How It Works
-Enter a stock ticker (e.g. AAPL)
-Fetch live market price
-Input trade parameters:
-Strike price
-Premium received
-Days to expiration
-Cost basis
-App calculates:
-Profit scenarios
-ROI and annualized return
-Risk/reward profile
-Visualize payoff curve and key levels
-📊 Example Trade Output
-Stock: AAPL @ $190
-Strike: $195
-Premium: $3
-Days: 30
+This tool analyzes U.S. equities and generates covered call suggestions based on:
 
-🟢 Strong Trade
-Max Profit: $8.00
-Break-even: $187.00
-ROI: 4.20%
-Annualized Return: 22.5%
-🛠 Tech Stack
-Flutter (Dart)
-REST API integration (Alpha Vantage)
-HTTP package
-fl_chart (data visualization)
-intl (currency formatting)
-Stateful UI (setState)
-Custom financial modeling logic
-📁 Project Structure
-lib/
- ├── main.dart
- ├── covered_call_calculator.dart
- ├── stock_api_service.dart
- 
-📌 Engineering Highlights
-Separation of concerns (UI / API / logic layers)
-Real-world financial modeling (options payoff structure)
-Defensive programming with input validation
-Interactive data visualization
-Clean, scalable Flutter architecture
-Portfolio-grade UI/UX improvements
+- Real-time stock prices
+- Live options chain data
+- Expiration (DTE) filtering
+- Liquidity constraints (volume + bid/ask quality)
+- Strike price range controls
+- Yield-based ranking system
 
-🚧 Future Improvements
-Options chain integration (real market contracts)
-Multi-leg strategy support (spreads, collars)
-Portfolio tracking dashboard
-AWS backend (Lambda + API Gateway)
-Advanced payoff analytics (Greeks, volatility modeling)
-Export trades to CSV / history tracking
+It outputs a ranked table of covered call opportunities and highlights the top recommendation.
 
-🧭 Purpose
+---
 
-This project is part of a broader effort to build practical fintech engineering experience using:
+## 📈 Example Output
 
-Real market data
-Financial modeling
-Mobile-first UI design
-Cloud-ready architecture (future expansion)
 
-👨‍💻 Author
+SYMBOL PRICE STRIKE PREMIUM YIELD DTE SHARES
+TSLA $373.35 $380.00 $15.15 4.06 28 0
+MSFT $415.47 $420.00 $15.80 3.80 28 0
+NVDA $199.21 $205.00 $6.80 3.41 28 0
+AAPL $273.36 $277.50 $6.20 2.27 21 0
 
-Built by Matthew R. Smith
-Focused on fintech, cloud engineering, and applied software development.
+
+---
+
+## 🧠 Key Features
+
+### 📊 Market Data
+- Uses live stock prices via Yahoo Finance
+- Pulls full options chains across expirations
+
+### ⚙️ Strategy Logic
+- Filters contracts by:
+  - 7–30 day expiration window
+  - 1%–5% out-of-the-money strikes
+  - Minimum volume threshold
+  - Bid/ask liquidity quality
+
+### 📈 Ranking System
+- Calculates yield = premium / stock price
+- Sorts and identifies highest-quality opportunities
+
+### 🧾 Portfolio Awareness
+- Connects to brokerage account (optional)
+- Checks share ownership for covered call eligibility
+
+---
+
+## 🛠 Tech Stack
+
+- Python 3
+- yfinance (market + options data)
+- Alpaca Trading API (optional brokerage integration)
+- pandas (data processing)
+- argparse (CLI interface)
+
+---
+
+## 📦 Installation
+
+```bash
+git clone https://github.com/yourusername/covered-call-engine.git
+cd covered-call-engine
+pip install -r requirements.txt
+▶️ How to Run
+Single stock analysis:
+python covered_call_engine.py --symbol AAPL
+Multi-stock scan:
+python covered_call_engine.py --scan AAPL TSLA NVDA MSFT
+⚠️ Disclaimer
+
+This tool is for educational and analytical purposes only. It does not provide financial advice. Options trading involves risk and may not be suitable for all investors.
+
+📌 Future Improvements
+
+Planned enhancements include:
+
+Probability of profit modeling
+Implied volatility scoring
+Risk-adjusted return ranking
+API version for web/mobile integration
+Frontend dashboard (Flutter integration)
+👤 Author
+
+Built as a personal finance + trading automation project exploring:
+
+options strategy automation
+market data engineering
+Python-based financial systems
