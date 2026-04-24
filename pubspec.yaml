@@ -1,5 +1,5 @@
 name: covered_call_app
-description: A Flutter covered call builder and payoff visualizer
+description: A Flutter app connected to a Python covered call backend.
 
 publish_to: "none"
 
@@ -12,10 +12,9 @@ dependencies:
   flutter:
     sdk: flutter
 
-  cupertino_icons: ^1.0.8
-  http: ^1.6.0
-  fl_chart: ^0.69.0
-  intl: ^0.18.1   # 👈 added this line
+  http: ^1.1.0
+
+  cupertino_icons: ^1.0.2
 
 dev_dependencies:
   flutter_test:
