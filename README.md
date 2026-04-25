@@ -1,97 +1,134 @@
-# 📊 Covered Call Options Analysis Engine
+📊 Covered Call Options API (Live Trading Engine)
 
-A Python-based options analysis tool that scans real market data to identify potential covered call opportunities using live option chains, liquidity filters, and risk constraints.
+A Python-based FastAPI backend deployed on AWS EC2 that analyzes real market data and generates ranked covered call opportunities using live option chains, liquidity filters, and yield optimization.
 
----
+🚀 What This Project Does
 
-## 🚀 What This Project Does
+This project runs as a live API service that:
 
-This tool analyzes U.S. equities and generates covered call suggestions based on:
+Fetches real-time stock prices via Yahoo Finance
+Pulls full options chains across multiple expirations
+Filters contracts using liquidity + risk constraints
+Generates 3 ranked covered call strategies
+Exposes results through a REST API endpoint
 
-- Real-time stock prices
-- Live options chain data
-- Expiration (DTE) filtering
-- Liquidity constraints (volume + bid/ask quality)
-- Strike price range controls
-- Yield-based ranking system
+Instead of a CLI tool, this is now a production-style backend service ready for frontend integration (Flutter/web).
 
-It outputs a ranked table of covered call opportunities and highlights the top recommendation.
+🌐 Live API Endpoint
+Base URL (EC2 hosted)
+http://<EC2-IP>:8000
+📌 Covered Call Recommendation
+GET /covered-call?symbol=AAPL
+Example Response
+{
+  "symbol": "AAPL",
+  "price": 271.05,
+  "shares": 0,
+  "options": [
+    {
+      "rank": "best",
+      "strike": 275.0,
+      "premium": 6.3,
+      "yield": 2.4,
+      "expiration": "2026-05-22",
+      "dte": 26
+    },
+    {
+      "rank": "alternative",
+      "strike": 275.0,
+      "premium": 5.65,
+      "yield": 2.12,
+      "expiration": "2026-05-15",
+      "dte": 19
+    },
+    {
+      "rank": "aggressive",
+      "strike": 275.0,
+      "premium": 4.9,
+      "yield": 1.84,
+      "expiration": "2026-05-08",
+      "dte": 12
+    }
+  ],
+  "best": {
+    "rank": "best",
+    "strike": 275.0,
+    "premium": 6.3,
+    "yield": 2.4,
+    "expiration": "2026-05-22",
+    "dte": 26
+  }
+}
+🧠 Key Features
 
----
+📊 Market Data Engine
 
-## 📈 Example Output
+Live stock prices via Yahoo Finance
+Full options chain scanning across expirations
+Real-time market data processing
 
-
-SYMBOL PRICE STRIKE PREMIUM YIELD DTE SHARES
-TSLA $373.35 $380.00 $15.15 4.06 28 0
-MSFT $415.47 $420.00 $15.80 3.80 28 0
-NVDA $199.21 $205.00 $6.80 3.41 28 0
-AAPL $273.36 $277.50 $6.20 2.27 21 0
+⚙️ Strategy Logic
 
 
----
+Filters options by:
+7–30 day expiration window (DTE)
+Out-of-the-money strike selection
+Liquidity constraints (volume + spread quality)
+Computes yield-based ranking system
 
-## 🧠 Key Features
+🏆 3-Level Recommendation System
 
-### 📊 Market Data
-- Uses live stock prices via Yahoo Finance
-- Pulls full options chains across expirations
+Each stock returns:
 
-### ⚙️ Strategy Logic
-- Filters contracts by:
-  - 7–30 day expiration window
-  - 1%–5% out-of-the-money strikes
-  - Minimum volume threshold
-  - Bid/ask liquidity quality
+Best → highest yield + balanced risk
+Alternative → secondary optimized contract
+Aggressive → higher risk/reward structure
+🧾 Portfolio Awareness (Optional)
+Alpaca integration (if configured)
+Checks share holdings for covered call eligibility
+🛠 Tech Stack
+Python 3.12
+FastAPI
+Uvicorn (ASGI server)
+yfinance (market data)
+pandas (data processing)
+AWS EC2 (deployment)
+GitHub (version control)
 
-### 📈 Ranking System
-- Calculates yield = premium / stock price
-- Sorts and identifies highest-quality opportunities
+☁️ Deployment Architecture
+Flutter / Web App
+        ↓
+FastAPI Backend (EC2)
+        ↓
+Market Data (Yahoo Finance)
 
-### 🧾 Portfolio Awareness
-- Connects to brokerage account (optional)
-- Checks share ownership for covered call eligibility
-
----
-
-## 🛠 Tech Stack
-
-- Python 3
-- yfinance (market + options data)
-- Alpaca Trading API (optional brokerage integration)
-- pandas (data processing)
-- argparse (CLI interface)
-
----
-
-## 📦 Installation
-
-```bash
-git clone https://github.com/yourusername/covered-call-engine.git
-cd covered-call-engine
+🚀 How to Run Locally
 pip install -r requirements.txt
-▶️ How to Run
-Single stock analysis:
-python covered_call_engine.py --symbol AAPL
-Multi-stock scan:
-python covered_call_engine.py --scan AAPL TSLA NVDA MSFT
+uvicorn main:app --reload
+
+Then open:
+
+http://127.0.0.1:8000/docs
+
+🧪 Example API Call
+curl "http://localhost:8000/covered-call?symbol=AAPL"
 ⚠️ Disclaimer
 
-This tool is for educational and analytical purposes only. It does not provide financial advice. Options trading involves risk and may not be suitable for all investors.
+This project is for educational and analytical purposes only.
+It does not provide financial advice. Options trading involves risk and may not be suitable for all investors.
 
 📌 Future Improvements
-
-Planned enhancements include:
-
 Probability of profit modeling
 Implied volatility scoring
-Risk-adjusted return ranking
-API version for web/mobile integration
-Frontend dashboard (Flutter integration)
+Risk-adjusted ranking engine
+Database for trade history tracking
+Flutter frontend dashboard integration
+User portfolio tracking system
 👤 Author
 
 Built as a personal finance + trading automation project exploring:
 
 options strategy automation
-market data engineering
-Python-based financial systems
+real-time financial data engineering
+backend API design on AWS
+scalable trading system architecture
