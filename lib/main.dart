@@ -35,6 +35,20 @@ class _CoveredCallPageState extends State<CoveredCallPage> {
 
   final String baseUrl = "http://54.147.143.148:8000";
 
+  String formatOption(String title, dynamic option) {
+    final strike = option['strike'].toDouble();
+    final premium = option['premium'].toDouble();
+    final yieldPct = option['yield'].toDouble();
+
+    return "$title\n"
+        "---------------------------\n"
+        "Strike: \$${strike.toStringAsFixed(2)}\n"
+        "Premium: \$${premium.toStringAsFixed(2)}\n"
+        "Yield: ${yieldPct.toStringAsFixed(2)}%\n"
+        "Expiration: ${option['expiration']}\n"
+        "Days to Expiration: ${option['dte']}\n";
+  }
+
   Future<void> fetchCoveredCall() async {
     final symbol = _controller.text.trim().toUpperCase();
 
@@ -58,24 +72,22 @@ class _CoveredCallPageState extends State<CoveredCallPage> {
 
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
-        final best = data["best"];
+
+        final options = data["options"];
+
+        final best = options[0];
+        final alternative = options[1];
+        final aggressive = options[2];
 
         setState(() {
           final price = data['price'].toDouble();
-          final strike = best['strike'].toDouble();
-          final premium = best['premium'].toDouble();
-          final yieldPct = best['yield'].toDouble();
 
           result =
               "📈 ${data['symbol']}\n"
               "Price: \$${price.toStringAsFixed(2)}\n\n"
-              "💡 Best Covered Call\n"
-              "---------------------------\n"
-              "Strike: \$${strike.toStringAsFixed(2)}\n"
-              "Premium: \$${premium.toStringAsFixed(2)}\n"
-              "Yield: ${yieldPct.toStringAsFixed(2)}%\n"
-              "Expiration: ${best['expiration']}\n"
-              "Days to Expiration: ${best['dte']}";
+              "${formatOption("💡 Best Covered Call", best)}\n"
+              "${formatOption("⚖️ Alternative Covered Call", alternative)}\n"
+              "${formatOption("🔥 Aggressive Covered Call", aggressive)}";
         });
       } else {
         setState(() {
@@ -128,16 +140,20 @@ class _CoveredCallPageState extends State<CoveredCallPage> {
               const Center(child: CircularProgressIndicator()),
 
             if (!isLoading && result.isNotEmpty)
-              Card(
-                elevation: 4,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Padding(
-                  padding: const EdgeInsets.all(16),
-                  child: Text(
-                    result,
-                    style: const TextStyle(fontSize: 16),
+              Expanded(
+                child: SingleChildScrollView(
+                  child: Card(
+                    elevation: 4,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Padding(
+                      padding: const EdgeInsets.all(16),
+                      child: Text(
+                        result,
+                        style: const TextStyle(fontSize: 16),
+                      ),
+                    ),
                   ),
                 ),
               ),
