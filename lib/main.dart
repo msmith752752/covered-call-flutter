@@ -33,6 +33,8 @@ class _CoveredCallPageState extends State<CoveredCallPage> {
   String result = "";
   bool isLoading = false;
 
+  final String baseUrl = "http://54.147.143.148:8000";
+
   Future<void> fetchCoveredCall() async {
     final symbol = _controller.text.trim().toUpperCase();
 
@@ -49,32 +51,40 @@ class _CoveredCallPageState extends State<CoveredCallPage> {
     });
 
     try {
-      final url = Uri.parse(
-          "http://98.93.104.104:8000/covered-call?symbol=$symbol");
+      final url = Uri.parse("$baseUrl/covered-call")
+          .replace(queryParameters: {"symbol": symbol});
 
       final response = await http.get(url);
 
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
+        final best = data["best"];
 
         setState(() {
+          final price = data['price'].toDouble();
+          final strike = best['strike'].toDouble();
+          final premium = best['premium'].toDouble();
+          final yieldPct = best['yield'].toDouble();
+
           result =
-              "Symbol: ${data['symbol']}\n"
-              "Price: \$${data['price']}\n"
-              "Strike: \$${data['strike']}\n"
-              "Premium: \$${data['premium']}\n"
-              "Yield: ${data['yield']}%\n"
-              "Expiration: ${data['expiration']}\n"
-              "DTE: ${data['dte']}";
+              "📈 ${data['symbol']}\n"
+              "Price: \$${price.toStringAsFixed(2)}\n\n"
+              "💡 Best Covered Call\n"
+              "---------------------------\n"
+              "Strike: \$${strike.toStringAsFixed(2)}\n"
+              "Premium: \$${premium.toStringAsFixed(2)}\n"
+              "Yield: ${yieldPct.toStringAsFixed(2)}%\n"
+              "Expiration: ${best['expiration']}\n"
+              "Days to Expiration: ${best['dte']}";
         });
       } else {
         setState(() {
-          result = "Error: ${response.statusCode}";
+          result = "HTTP ERROR ${response.statusCode}\n\n${response.body}";
         });
       }
     } catch (e) {
       setState(() {
-        result = "Error: $e";
+        result = "⚠️ NETWORK ERROR\n\n$e";
       });
     } finally {
       setState(() {
