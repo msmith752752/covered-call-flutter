@@ -74,11 +74,11 @@ class _CoveredCallPageState extends State<CoveredCallPage> {
       context: context,
       builder: (context) {
         return AlertDialog(
-          title: const Text("About This App"),
+          title: const Text("About Yield Pilot"),
           content: const Text(
-            "This app helps estimate covered call income.\n\n"
-            "Covered calls generate income, but shares may be called away.\n\n"
-            "Educational use only.",
+            "Yield Pilot helps estimate covered call income.\n\n"
+            "Covered calls can generate income, but shares may be called away if the stock rises above the strike price.\n\n"
+            "Educational use only. Not financial advice.",
           ),
           actions: [
             TextButton(
@@ -152,7 +152,7 @@ class _CoveredCallPageState extends State<CoveredCallPage> {
   }
 
   IconData optionIcon(int index) {
-    if (index == 0) return Icons.lightbulb_outline;
+    if (index == 0) return Icons.star;
     if (index == 1) return Icons.balance;
     if (index == 2) return Icons.local_fire_department_outlined;
     return Icons.trending_up;
@@ -193,32 +193,58 @@ class _CoveredCallPageState extends State<CoveredCallPage> {
       riskIcon = Icons.warning_amber;
     }
 
+    final bool isBest = index == 0;
+
     return Card(
-      elevation: 3,
+      elevation: isBest ? 6 : 3,
       margin: const EdgeInsets.only(bottom: 16),
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(18),
+        side: isBest
+            ? BorderSide(color: Colors.indigo.shade300, width: 2)
+            : BorderSide.none,
       ),
       child: Padding(
         padding: const EdgeInsets.all(18),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
+            if (isBest)
+              Container(
+                margin: const EdgeInsets.only(bottom: 12),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                decoration: BoxDecoration(
+                  color: Colors.indigo.shade50,
+                  borderRadius: BorderRadius.circular(999),
+                ),
+                child: const Text(
+                  "⭐ Best Choice",
+                  style: TextStyle(
+                    color: Colors.indigo,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ),
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                Row(
-                  children: [
-                    Icon(optionIcon(index)),
-                    const SizedBox(width: 8),
-                    Text(
-                      optionTitle(index),
-                      style: const TextStyle(
-                        fontSize: 18,
-                        fontWeight: FontWeight.bold,
+                Flexible(
+                  child: Row(
+                    children: [
+                      Icon(optionIcon(index)),
+                      const SizedBox(width: 8),
+                      Flexible(
+                        child: Text(
+                          optionTitle(index),
+                          style: const TextStyle(
+                            fontSize: 18,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
                       ),
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
                 Container(
                   padding:
@@ -248,12 +274,13 @@ class _CoveredCallPageState extends State<CoveredCallPage> {
             buildMetricRow("Premium / Share", "\$${premium.toStringAsFixed(2)}"),
             buildMetricRow("Yield", "${yieldPct.toStringAsFixed(2)}%"),
             buildMetricRow("Expiration", "$expiration"),
-            buildMetricRow("Days to Expiration", "$dte"),
+            buildMetricRow("Time Left", "Expires in $dte days"),
             const Divider(height: 24),
             buildMetricRow("Contracts", "$contractCount"),
             buildMetricRow(
               "Estimated Income",
-              "\$${estimatedIncome.toStringAsFixed(2)}",
+              "\$${estimatedIncome.toStringAsFixed(2)} per cycle",
+              isHighlighted: true,
             ),
             const Divider(height: 24),
             const Text(
@@ -269,16 +296,27 @@ class _CoveredCallPageState extends State<CoveredCallPage> {
     );
   }
 
-  Widget buildMetricRow(String label, String value) {
+  Widget buildMetricRow(
+    String label,
+    String value, {
+    bool isHighlighted = false,
+  }) {
     return Padding(
       padding: const EdgeInsets.only(bottom: 9),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
           Text(label, style: const TextStyle(color: Colors.black54)),
-          Text(
-            value,
-            style: const TextStyle(fontWeight: FontWeight.w600),
+          Flexible(
+            child: Text(
+              value,
+              textAlign: TextAlign.right,
+              style: TextStyle(
+                fontWeight: FontWeight.w700,
+                fontSize: isHighlighted ? 16 : 14,
+                color: isHighlighted ? Colors.green.shade700 : Colors.black,
+              ),
+            ),
           ),
         ],
       ),
@@ -312,7 +350,6 @@ class _CoveredCallPageState extends State<CoveredCallPage> {
               style: TextStyle(fontSize: 16, fontWeight: FontWeight.w500),
             ),
             const SizedBox(height: 16),
-
             const Align(
               alignment: Alignment.centerLeft,
               child: Text(
@@ -325,7 +362,6 @@ class _CoveredCallPageState extends State<CoveredCallPage> {
               ),
             ),
             const SizedBox(height: 8),
-
             TextField(
               controller: _symbolController,
               decoration: const InputDecoration(
@@ -334,9 +370,7 @@ class _CoveredCallPageState extends State<CoveredCallPage> {
                 prefixIcon: Icon(Icons.search),
               ),
             ),
-
             const SizedBox(height: 12),
-
             TextField(
               controller: _sharesController,
               decoration: const InputDecoration(
@@ -346,34 +380,32 @@ class _CoveredCallPageState extends State<CoveredCallPage> {
               ),
               keyboardType: TextInputType.number,
             ),
-
             const SizedBox(height: 12),
-
-            ElevatedButton(
-              onPressed: fetchCoveredCall,
-              style: ElevatedButton.styleFrom(
-                padding: const EdgeInsets.symmetric(vertical: 16),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12),
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton(
+                onPressed: fetchCoveredCall,
+                style: ElevatedButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(vertical: 16),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                ),
+                child: const Text(
+                  "Analyze Covered Call",
+                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
                 ),
               ),
-              child: const Text(
-                "Analyze Covered Call",
-                style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-              ),
             ),
-
             const SizedBox(height: 20),
-
             if (isLoading)
-              Column(
-                children: const [
+              const Column(
+                children: [
                   CircularProgressIndicator(),
                   SizedBox(height: 12),
                   Text("Analyzing options..."),
                 ],
               ),
-
             if (errorMessage.isNotEmpty)
               Card(
                 color: Colors.red.shade50,
@@ -385,17 +417,46 @@ class _CoveredCallPageState extends State<CoveredCallPage> {
                   ),
                 ),
               ),
-
             if (!isLoading && options.isEmpty && errorMessage.isEmpty)
-              const Padding(
-                padding: EdgeInsets.only(top: 40),
-                child: Text(
-                  "Enter a stock symbol and shares to analyze covered call opportunities.",
-                  textAlign: TextAlign.center,
-                  style: TextStyle(color: Colors.black54),
+              Padding(
+                padding: const EdgeInsets.only(top: 32),
+                child: Card(
+                  elevation: 1,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(18),
+                  ),
+                  child: const Padding(
+                    padding: EdgeInsets.all(20),
+                    child: Column(
+                      children: [
+                        Icon(
+                          Icons.insights,
+                          size: 34,
+                          color: Colors.indigo,
+                        ),
+                        SizedBox(height: 12),
+                        Text(
+                          "Ready to analyze your position",
+                          textAlign: TextAlign.center,
+                          style: TextStyle(
+                            fontSize: 17,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                        SizedBox(height: 8),
+                        Text(
+                          "Enter your stock symbol and shares above to generate covered call strategies.\n\nYield Pilot will estimate premium, risk, income potential, break-even, and max profit.",
+                          textAlign: TextAlign.center,
+                          style: TextStyle(
+                            color: Colors.black54,
+                            height: 1.4,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
                 ),
               ),
-
             if (hasResults)
               Expanded(
                 child: ListView.builder(
