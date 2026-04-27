@@ -1,4 +1,36 @@
+# ----------------------------
+# Python (backend)
+# ----------------------------
 venv/
 __pycache__/
 *.pyc
 .env
+
+# ----------------------------
+# Flutter / Dart
+# ----------------------------
+.dart_tool/
+.flutter-plugins
+.flutter-plugins-dependencies
+.packages
+.pub-cache/
+.pub/
+build/
+
+# ----------------------------
+# IDE / Editor
+# ----------------------------
+.idea/
+.vscode/
+*.iml
+
+# ----------------------------
+# Logs
+# ----------------------------
+*.log
+
+# ----------------------------
+# OS files
+# ----------------------------
+.DS_Store
+Thumbs.db

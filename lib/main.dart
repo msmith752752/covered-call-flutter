@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
+import 'package:shared_preferences/shared_preferences.dart';
 
 void main() {
   runApp(const MyApp());
@@ -12,7 +13,7 @@ class MyApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'Covered Call Assistant',
+      title: 'Yield Pilot',
       debugShowCheckedModeBanner: false,
       theme: ThemeData(
         colorScheme: ColorScheme.fromSeed(seedColor: Colors.indigo),
@@ -44,9 +45,57 @@ class _CoveredCallPageState extends State<CoveredCallPage> {
   int sharesOwned = 0;
   List<dynamic> options = [];
 
+  @override
+  void initState() {
+    super.initState();
+    loadSavedInputs();
+  }
+
+  Future<void> loadSavedInputs() async {
+    final prefs = await SharedPreferences.getInstance();
+
+    final savedSymbol = prefs.getString("last_symbol") ?? "";
+    final savedShares = prefs.getInt("last_shares") ?? 0;
+
+    setState(() {
+      _symbolController.text = savedSymbol;
+      _sharesController.text = savedShares == 0 ? "" : savedShares.toString();
+    });
+  }
+
+  Future<void> saveInputs(String symbol, int shares) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString("last_symbol", symbol);
+    await prefs.setInt("last_shares", shares);
+  }
+
+  void showInfoDialog() {
+    showDialog(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          title: const Text("About This App"),
+          content: const Text(
+            "This app helps estimate covered call income.\n\n"
+            "Covered calls generate income, but shares may be called away.\n\n"
+            "Educational use only.",
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text("Got it"),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
   Future<void> fetchCoveredCall() async {
     final inputSymbol = _symbolController.text.trim().toUpperCase();
     final parsedShares = int.tryParse(_sharesController.text.trim()) ?? 0;
+
+    await saveInputs(inputSymbol, parsedShares);
 
     if (inputSymbol.isEmpty) {
       setState(() {
@@ -72,35 +121,16 @@ class _CoveredCallPageState extends State<CoveredCallPage> {
           .replace(queryParameters: {"symbol": inputSymbol});
 
       final response = await http.get(url);
-
-      if (response.statusCode != 200) {
-        setState(() {
-          errorMessage = "HTTP Error ${response.statusCode}\n${response.body}";
-        });
-        return;
-      }
-
       final data = jsonDecode(response.body);
-      final returnedOptions = data["options"];
-
-      if (returnedOptions == null ||
-          returnedOptions is! List ||
-          returnedOptions.isEmpty) {
-        setState(() {
-          errorMessage = "No covered call options found for $inputSymbol.";
-        });
-        return;
-      }
 
       setState(() {
-        symbol = data["symbol"] ?? inputSymbol;
+        symbol = data["symbol"];
         stockPrice = (data["price"] as num).toDouble();
-        options = returnedOptions;
+        options = data["options"];
       });
     } catch (e) {
       setState(() {
-        errorMessage =
-            "Network error. Make sure the EC2 backend is running.\n\n$e";
+        errorMessage = "Backend not running or network issue.";
       });
     } finally {
       setState(() {
@@ -137,9 +167,35 @@ class _CoveredCallPageState extends State<CoveredCallPage> {
 
     final estimatedIncome = premium * contractCount * 100;
 
+    final breakEven = stockPrice != null ? stockPrice! - premium : 0;
+    final maxProfit = stockPrice != null
+        ? ((strike - stockPrice!) + premium) * sharesOwned
+        : 0;
+
+    double distancePct = 0;
+    if (stockPrice != null) {
+      distancePct = (strike - stockPrice!) / stockPrice!;
+    }
+
+    String riskLabel = "Balanced";
+    Color riskColor = Colors.orange;
+    IconData riskIcon = Icons.balance;
+
+    if (distancePct <= 0.02) {
+      riskLabel = "Conservative";
+      riskColor = Colors.green;
+      riskIcon = Icons.shield;
+    } else if (distancePct <= 0.05) {
+      riskLabel = "Balanced";
+    } else {
+      riskLabel = "Aggressive";
+      riskColor = Colors.red;
+      riskIcon = Icons.warning_amber;
+    }
+
     return Card(
-      elevation: 2,
-      margin: const EdgeInsets.only(bottom: 14),
+      elevation: 3,
+      margin: const EdgeInsets.only(bottom: 16),
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(18),
       ),
@@ -149,16 +205,42 @@ class _CoveredCallPageState extends State<CoveredCallPage> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                Icon(optionIcon(index)),
-                const SizedBox(width: 8),
-                Text(
-                  optionTitle(index),
-                  style: const TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.bold,
-                  ),
+                Row(
+                  children: [
+                    Icon(optionIcon(index)),
+                    const SizedBox(width: 8),
+                    Text(
+                      optionTitle(index),
+                      style: const TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ],
                 ),
+                Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: riskColor.withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Row(
+                    children: [
+                      Icon(riskIcon, size: 16, color: riskColor),
+                      const SizedBox(width: 4),
+                      Text(
+                        riskLabel,
+                        style: TextStyle(
+                          color: riskColor,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ],
+                  ),
+                )
               ],
             ),
             const SizedBox(height: 14),
@@ -173,6 +255,14 @@ class _CoveredCallPageState extends State<CoveredCallPage> {
               "Estimated Income",
               "\$${estimatedIncome.toStringAsFixed(2)}",
             ),
+            const Divider(height: 24),
+            const Text(
+              "Trade Summary",
+              style: TextStyle(fontWeight: FontWeight.bold),
+            ),
+            const SizedBox(height: 10),
+            buildMetricRow("Break-even", "\$${breakEven.toStringAsFixed(2)}"),
+            buildMetricRow("Max Profit", "\$${maxProfit.toStringAsFixed(2)}"),
           ],
         ),
       ),
@@ -195,163 +285,127 @@ class _CoveredCallPageState extends State<CoveredCallPage> {
     );
   }
 
-  Widget buildStockHeader() {
-    if (symbol.isEmpty || stockPrice == null) {
-      return const SizedBox.shrink();
-    }
-
-    return Card(
-      elevation: 3,
-      margin: const EdgeInsets.only(bottom: 16),
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(18),
-      ),
-      child: Padding(
-        padding: const EdgeInsets.all(18),
-        child: Column(
-          children: [
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Text(
-                  symbol,
-                  style: const TextStyle(
-                    fontSize: 26,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-                Text(
-                  "\$${stockPrice!.toStringAsFixed(2)}",
-                  style: const TextStyle(
-                    fontSize: 24,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 10),
-            buildMetricRow("Shares Owned", "$sharesOwned"),
-            buildMetricRow("Covered Call Contracts", "$contractCount"),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget buildDisclaimer() {
-    return Container(
-      margin: const EdgeInsets.only(top: 10, bottom: 20),
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: Colors.amber.shade50,
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: Colors.amber.shade200),
-      ),
-      child: const Text(
-        "Educational use only. This app does not provide financial advice. "
-        "Estimated income assumes 100 shares per options contract and does not include fees, assignment risk, taxes, or price changes.",
-        style: TextStyle(fontSize: 13, color: Colors.black87),
-      ),
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
     final hasResults = options.isNotEmpty;
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text("Covered Call Assistant"),
-        centerTitle: true,
+        title: const Text(
+          "Yield Pilot",
+          style: TextStyle(fontWeight: FontWeight.bold),
+        ),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.info_outline),
+            onPressed: showInfoDialog,
+          )
+        ],
       ),
-      body: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.all(16),
-          child: Column(
-            children: [
-              const Text(
-                "Find covered call ideas and estimate potential income based on shares owned.",
-                textAlign: TextAlign.center,
-                style: TextStyle(fontSize: 15, color: Colors.black54),
-              ),
-              const SizedBox(height: 16),
+      body: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          children: [
+            const Text(
+              "Navigate Covered Call Income With Clarity",
+              textAlign: TextAlign.center,
+              style: TextStyle(fontSize: 16, fontWeight: FontWeight.w500),
+            ),
+            const SizedBox(height: 16),
 
-              TextField(
-                controller: _symbolController,
-                textCapitalization: TextCapitalization.characters,
-                decoration: const InputDecoration(
-                  labelText: "Enter Symbol",
-                  hintText: "Example: AAPL",
-                  prefixIcon: Icon(Icons.search),
-                  border: OutlineInputBorder(),
+            const Align(
+              alignment: Alignment.centerLeft,
+              child: Text(
+                "Enter Position",
+                style: TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.black54,
                 ),
-                onSubmitted: (_) => fetchCoveredCall(),
               ),
+            ),
+            const SizedBox(height: 8),
 
-              const SizedBox(height: 12),
+            TextField(
+              controller: _symbolController,
+              decoration: const InputDecoration(
+                labelText: "Stock Symbol (e.g. AAPL)",
+                hintText: "AAPL",
+                prefixIcon: Icon(Icons.search),
+              ),
+            ),
 
-              TextField(
-                controller: _sharesController,
-                keyboardType: TextInputType.number,
-                decoration: const InputDecoration(
-                  labelText: "Shares Owned",
-                  hintText: "Example: 100",
-                  prefixIcon: Icon(Icons.pie_chart_outline),
-                  border: OutlineInputBorder(),
+            const SizedBox(height: 12),
+
+            TextField(
+              controller: _sharesController,
+              decoration: const InputDecoration(
+                labelText: "Shares Owned",
+                hintText: "100",
+                prefixIcon: Icon(Icons.pie_chart_outline),
+              ),
+              keyboardType: TextInputType.number,
+            ),
+
+            const SizedBox(height: 12),
+
+            ElevatedButton(
+              onPressed: fetchCoveredCall,
+              style: ElevatedButton.styleFrom(
+                padding: const EdgeInsets.symmetric(vertical: 16),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
                 ),
-                onSubmitted: (_) => fetchCoveredCall(),
+              ),
+              child: const Text(
+                "Analyze Covered Call",
+                style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+              ),
+            ),
+
+            const SizedBox(height: 20),
+
+            if (isLoading)
+              Column(
+                children: const [
+                  CircularProgressIndicator(),
+                  SizedBox(height: 12),
+                  Text("Analyzing options..."),
+                ],
               ),
 
-              const SizedBox(height: 12),
-
-              SizedBox(
-                width: double.infinity,
-                child: ElevatedButton(
-                  onPressed: isLoading ? null : fetchCoveredCall,
-                  style: ElevatedButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(vertical: 15),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(14),
-                    ),
-                  ),
+            if (errorMessage.isNotEmpty)
+              Card(
+                color: Colors.red.shade50,
+                child: Padding(
+                  padding: const EdgeInsets.all(12),
                   child: Text(
-                    isLoading ? "Loading..." : "Get Covered Calls",
-                    style: const TextStyle(fontSize: 16),
+                    errorMessage,
+                    style: const TextStyle(color: Colors.red),
                   ),
                 ),
               ),
 
-              const SizedBox(height: 18),
-
-              if (isLoading) const CircularProgressIndicator(),
-
-              if (!isLoading && errorMessage.isNotEmpty)
-                Card(
-                  color: Colors.red.shade50,
-                  child: Padding(
-                    padding: const EdgeInsets.all(16),
-                    child: Text(
-                      errorMessage,
-                      style: const TextStyle(color: Colors.red),
-                    ),
-                  ),
+            if (!isLoading && options.isEmpty && errorMessage.isEmpty)
+              const Padding(
+                padding: EdgeInsets.only(top: 40),
+                child: Text(
+                  "Enter a stock symbol and shares to analyze covered call opportunities.",
+                  textAlign: TextAlign.center,
+                  style: TextStyle(color: Colors.black54),
                 ),
+              ),
 
-              if (!isLoading && hasResults)
-                Expanded(
-                  child: SingleChildScrollView(
-                    child: Column(
-                      children: [
-                        buildStockHeader(),
-                        for (int i = 0; i < options.length && i < 3; i++)
-                          buildOptionCard(options[i], i),
-                        buildDisclaimer(),
-                      ],
-                    ),
-                  ),
+            if (hasResults)
+              Expanded(
+                child: ListView.builder(
+                  itemCount: options.length,
+                  itemBuilder: (context, index) {
+                    return buildOptionCard(options[index], index);
+                  },
                 ),
-            ],
-          ),
+              ),
+          ],
         ),
       ),
     );
