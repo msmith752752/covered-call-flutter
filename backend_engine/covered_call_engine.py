@@ -96,7 +96,7 @@ def generate_covered_call(symbol, price, min_dte=7, max_dte=30):
         return None
 
     # Safe numeric conversion
-    for col in ["bid", "ask", "volume"]:
+    for col in ["bid", "ask", "lastPrice", "volume"]:
         if col in options.columns:
             options[col] = pd.to_numeric(options[col], errors="coerce")
         else:
@@ -111,27 +111,32 @@ def generate_covered_call(symbol, price, min_dte=7, max_dte=30):
             (options["strike"] >= price * 1.01) &
             (options["dte"] >= min_dte) &
             (options["dte"] <= max_dte) &
-            (options["bid"].fillna(0) > 0) &
+            (options["lastPrice"].fillna(0) > 0) &
             (options["volume"].fillna(0) > 50)
         ].copy()
 
         if filtered.empty:
             return None
 
-        filtered["yield"] = (filtered["bid"].fillna(0) / price) * 100
+        filtered["yield"] = (filtered["lastPrice"].fillna(0) / price) * 100
 
-        if len(filtered) == 0:
-            return None
+        sorted_calls = filtered.sort_values(by="yield", ascending=False)
+        top_calls = sorted_calls.head(3)
 
-        best = filtered.sort_values(by="yield", ascending=False).iloc[0]
+        results = []
+        labels = ["best", "alternative", "aggressive"]
 
-        return {
-            "strike": round(best["strike"], 2),
-            "premium": round(best["bid"], 2),
-            "yield": round(best["yield"], 2),
-            "expiration": best["expiration"],
-            "dte": int(best["dte"])
-        }
+        for i, (_, row) in enumerate(top_calls.iterrows()):
+            results.append({
+                "rank": labels[i] if i < len(labels) else f"option_{i+1}",
+                "strike": round(row.get("strike", 0), 2),
+                "premium": round(row.get("lastPrice", 0), 2),
+                "yield": round(row.get("yield", 0), 2),
+                "expiration": row.get("expiration"),
+                "dte": int(row.get("dte", 0))
+            })
+
+        return results
 
     except Exception:
         return None
@@ -146,9 +151,9 @@ def analyze(symbol, positions):
     if price is None:
         return None
 
-    cc = generate_covered_call(symbol, price)
+    options = generate_covered_call(symbol, price)
 
-    if cc is None:
+    if options is None or len(options) == 0:
         return None
 
     shares = positions.get(symbol, 0)
@@ -156,10 +161,6 @@ def analyze(symbol, positions):
     return {
         "symbol": symbol,
         "price": price,
-        "strike": cc["strike"],
-        "premium": cc["premium"],
-        "yield": cc["yield"],
-        "expiration": cc["expiration"],
-        "dte": cc["dte"],
+        "options": options,
         "shares": shares
     }
