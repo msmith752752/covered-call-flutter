@@ -13,6 +13,21 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+def round_value(value, decimals=2):
+    if isinstance(value, (int, float)):
+        return round(value, decimals)
+    return value
+
+def format_option(option):
+    return {
+        "rank": option.get("rank"),
+        "strike": round_value(option.get("strike")),
+        "premium": round_value(option.get("premium")),
+        "yield": round_value(option.get("yield")),
+        "expiration": option.get("expiration"),
+        "dte": option.get("dte"),
+    }
+
 @app.get("/")
 def root():
     return {
@@ -39,12 +54,13 @@ def covered_call(symbol: str, shares: int = 0):
         }
 
     options = result.get("options", [])
-    best = options[0] if options else None
+    formatted_options = [format_option(option) for option in options]
+    best = formatted_options[0] if formatted_options else None
 
     return {
         "symbol": result.get("symbol"),
-        "price": result.get("price"),
+        "price": round_value(result.get("price")),
         "shares": result.get("shares"),
-        "options": options,
+        "options": formatted_options,
         "best": best
     }
