@@ -13,20 +13,31 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+
 def round_value(value, decimals=2):
     if isinstance(value, (int, float)):
         return round(value, decimals)
     return value
 
-def format_option(option):
+
+def format_option(option, stock_price):
+    premium = option.get("premium")
+    dte = option.get("dte")
+
+    return_pct = (premium / stock_price) * 100 if premium and stock_price else 0
+    annualized_return = return_pct * (365 / dte) if dte else 0
+
     return {
         "rank": option.get("rank"),
         "strike": round_value(option.get("strike")),
-        "premium": round_value(option.get("premium")),
+        "premium": round_value(premium),
         "yield": round_value(option.get("yield")),
+        "return_pct": round_value(return_pct),
+        "annualized_return": round_value(annualized_return),
         "expiration": option.get("expiration"),
-        "dte": option.get("dte"),
+        "dte": dte,
     }
+
 
 @app.get("/")
 def root():
@@ -34,6 +45,7 @@ def root():
         "status": "ok",
         "message": "Yield Pilot API running"
     }
+
 
 @app.get("/covered-call")
 def covered_call(symbol: str, shares: int = 0):
@@ -53,13 +65,14 @@ def covered_call(symbol: str, shares: int = 0):
             "shares": shares
         }
 
+    stock_price = result.get("price")
     options = result.get("options", [])
-    formatted_options = [format_option(option) for option in options]
+    formatted_options = [format_option(option, stock_price) for option in options]
     best = formatted_options[0] if formatted_options else None
 
     return {
         "symbol": result.get("symbol"),
-        "price": round_value(result.get("price")),
+        "price": round_value(stock_price),
         "shares": result.get("shares"),
         "options": formatted_options,
         "best": best
