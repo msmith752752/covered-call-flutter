@@ -117,8 +117,12 @@ class _CoveredCallPageState extends State<CoveredCallPage> {
     });
 
     try {
-      final url = Uri.parse("$baseUrl/covered-call")
-          .replace(queryParameters: {"symbol": inputSymbol});
+      final url = Uri.parse("$baseUrl/covered-call").replace(
+        queryParameters: {
+          "symbol": inputSymbol,
+          "shares": parsedShares.toString(),
+        },
+      );
 
       final response = await http.get(url);
       final data = jsonDecode(response.body);
@@ -126,6 +130,7 @@ class _CoveredCallPageState extends State<CoveredCallPage> {
       setState(() {
         symbol = data["symbol"];
         stockPrice = (data["price"] as num).toDouble();
+        sharesOwned = data["shares"] ?? parsedShares;
         options = data["options"];
       });
     } catch (e) {
@@ -162,6 +167,8 @@ class _CoveredCallPageState extends State<CoveredCallPage> {
     final strike = (option["strike"] as num).toDouble();
     final premium = (option["premium"] as num).toDouble();
     final yieldPct = (option["yield"] as num).toDouble();
+    final returnPct = (option["return_pct"] as num).toDouble();
+    final annualizedReturn = (option["annualized_return"] as num).toDouble();
     final expiration = option["expiration"];
     final dte = option["dte"];
 
@@ -273,6 +280,11 @@ class _CoveredCallPageState extends State<CoveredCallPage> {
             buildMetricRow("Strike", "\$${strike.toStringAsFixed(2)}"),
             buildMetricRow("Premium / Share", "\$${premium.toStringAsFixed(2)}"),
             buildMetricRow("Yield", "${yieldPct.toStringAsFixed(2)}%"),
+            buildMetricRow("Return", "${returnPct.toStringAsFixed(2)}%"),
+            buildMetricRow(
+              "Annualized Return",
+              "${annualizedReturn.toStringAsFixed(2)}%",
+            ),
             buildMetricRow("Expiration", "$expiration"),
             buildMetricRow("Time Left", "Expires in $dte days"),
             const Divider(height: 24),
